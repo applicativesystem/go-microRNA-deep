@@ -99,7 +99,7 @@ func psRNAFunc(cmd *cobra.Command, args []string) {
 	}
 
 	fastID := []fastPredID{}
-	fastaSeq := []fastPredSeq{}
+	fastSeq := []fastPredSeq{}
 
 	fastaOpen, err := os.Open(fastPred)
 	if err != nil {
@@ -108,7 +108,7 @@ func psRNAFunc(cmd *cobra.Command, args []string) {
 	fastaRead := bufio.NewScanner(fastaOpen)
 	for fastaRead.Scan() {
 		line := fastaRead.Text()
-		if strings.HaPrefix(string(line), ">") {
+		if strings.HasPrefix(string(line), ">") {
 			fastID = append(fastID, fastPredID{
 				id: strings.ReplaceAll(string(line), ">", ""),
 			})
@@ -121,7 +121,7 @@ func psRNAFunc(cmd *cobra.Command, args []string) {
 	}
 
 	storemiRNA := []psRNAStruct{}
-	storefilteredmiRNA := psRNAStructFiltered{}
+	filteredmiRNA := []psRNAStructFiltered{}
 
 	fOpen, err := os.Open(psRNAPred)
 	if err != nil {
@@ -151,7 +151,7 @@ func psRNAFunc(cmd *cobra.Command, args []string) {
 
 	for i := range storemiRNA {
 		if storemiRNA[i].evalue <= evalue {
-			storefilteredmiRNA = append(storefilteredmiRNA, psRNAStructFiltered{
+			filteredmiRNA = append(filteredmiRNA, psRNAStructFiltered{
 				miRNA:         storemiRNA[i].miRNA,
 				target:        storemiRNA[i].target,
 				evalue:        storemiRNA[i].evalue,
@@ -165,15 +165,34 @@ func psRNAFunc(cmd *cobra.Command, args []string) {
 
 	type extractSeq struct {
 		target      string
-		targetseq   string
-		targetStart string
-		targetEnd   string
+		targetSeq   string
+		targetStart int
+		targetEnd   int
 	}
 
 	targetExtract := []extractSeq{}
 
-	for i := range storefilteredmiRNA {
-		for j := range fastPredID {
+	for i := range filteredmiRNA {
+		for j := range fastID {
+			if filteredmiRNA[i].target == fastID[j].id {
+				targetExtract = append(targetExtract, extractSeq{
+					target:      filteredmiRNA[i].target,
+					targetSeq:   fastSeq[j].seq[filteredmiRNA[i].targetStart:filteredmiRNA[i].targetEnd],
+					targetStart: filteredmiRNA[i].targetStart,
+					targetEnd:   filteredmiRNA[i].targetEnd,
+				})
+			}
 		}
+	}
+
+	psRNAneural, err := os.Create("psRNANeural.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer psRNAneural.Close()
+	for i := range targetExtract {
+		psRNAneural.WriteString(
+			targetExtract[i].target + "\t" + ">" + targetExtract[i].targetSeq,
+		)
 	}
 }
