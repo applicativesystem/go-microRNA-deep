@@ -196,3 +196,99 @@ func psRNAFunc(cmd *cobra.Command, args []string) {
 		)
 	}
 }
+
+func tapirFunc(cmd *cobra.Command, args []string) {
+	target := []string{}
+	miRNA := []string{}
+	score := []int{}
+	mfe := []int{}
+	start := []int{}
+	end := []int{}
+
+	tapirOpen, err := os.Open(tapirPred)
+	if err != nil {
+		log.Fatal(err)
+	}
+	tapirRead := bufio.NewScanner(tapirOpen)
+	for tapirRead.Scan() {
+		line := tapirRead.Text()
+		if strings.HasPrefix(string(line), "target") {
+			target = append(target, strings.Split(string(line), " ")[1])
+		}
+		if strings.HasPrefix(string(line), "miRNA") {
+			miRNA := strings.Split(strings.Split(string(line), ":")[3], "=")[2]
+		}
+		if strings.HasPrefix(string(line), "score") {
+			scoreInter, _ := strconv.Atoi(strings.Split(string(line), " ")[1])
+			score = append(score, scoreInter)
+		}
+		if strings.HasPrefix(string(line), "mfe") {
+			mfeInter, _ := strconv.Atoi(strings.Split(string(line), " ")[1])
+			mfe = append(mfe, mfeInter)
+		}
+		if strings.HasPrefix(string(line), "start") {
+			startInter, _ := strconv.Atoi(strings.Split(string(line), " ")[1])
+			start = append(start, startInter)
+		}
+		if strings.HasPrefix(string(line), "target_5'") {
+			end = append(end, len(strings.Split(string(line), " ")[1]))
+		}
+	}
+
+	type tapirExtract struct {
+		tapid  string
+		tapseq string
+	}
+
+	type fastPredID struct {
+		id string
+	}
+
+	type fastPredSeq struct {
+		seq string
+	}
+
+	fastID := []fastPredID{}
+	fastSeq := []fastPredSeq{}
+
+	fastaOpen, err := os.Open(fastPred)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fastaRead := bufio.NewScanner(fastaOpen)
+	for fastaRead.Scan() {
+		line := fastaRead.Text()
+		if strings.HasPrefix(string(line), ">") {
+			fastID = append(fastID, fastPredID{
+				id: strings.ReplaceAll(string(line), ">", ""),
+			})
+		}
+		if !strings.HasPrefix(string(line), ">") {
+			fastSeq = append(fastSeq, fastPredSeq{
+				seq: string(line),
+			})
+		}
+	}
+
+	tapSeq := []tapirExtract{}
+
+	for i := range target {
+		for j := range fastID {
+			if target[i] == fastID[i].id {
+				tapSeq = append(tapSeq, tapirExtract{
+					tapid:  target[i],
+					tapseq: fastSeq[i].seq[start[i]:end[i]],
+				})
+			}
+		}
+	}
+
+	tapwrite, err := os.Create("tapirneural.fasta")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer tapwrite.Close()
+	for i := range tapSeq {
+		tapwrite.WriteString(tapSeq[i].tapid + "\t" + tapSeq[i].tapseq)
+	}
+}
