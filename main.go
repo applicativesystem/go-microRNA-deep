@@ -538,8 +538,8 @@ func tarFinderFunc(cmd *cobra.Command, args []string) {
 	type tarFinderCap struct {
 		miRNA    string
 		sequence string
-		start    int64
-		end      int64
+		start    int
+		end      int
 		mfe      float64
 	}
 
@@ -552,15 +552,79 @@ func tarFinderFunc(cmd *cobra.Command, args []string) {
 	fRead := bufio.NewScanner(fOpen)
 	for fRead.Scan() {
 		line := fRead.Text()
-		startConvert, _ := strconv.ParseInt(strings.Split(string(line), " ")[15], 0, 32)
-		endConvert, _ := strconv.ParseInt(strings.Split(string(line), " ")[16], 0, 32)
+		startConvert, _ := strconv.Atoi(strings.Split(string(line), " ")[15])
+		endConvert, _ := strconv.Atoi(strings.Split(string(line), " ")[16])
 		mfeConvert, _ := strconv.ParseFloat(strings.Split(string(line), " ")[18], 64)
-		tarFinderAdd := append(tarFinderAdd, tarFinderCap{
+		tarFinderAdd = append(tarFinderAdd, tarFinderCap{
 			miRNA:    strings.Split(string(line), " ")[0],
 			sequence: strings.Split(string(line), " ")[11],
 			start:    startConvert,
 			end:      endConvert,
 			mfe:      mfeConvert,
 		})
+	}
+
+	type fastPredID struct {
+		id string
+	}
+
+	type fastPredSeq struct {
+		seq string
+	}
+
+	fastID := []fastPredID{}
+	fastSeq := []fastPredSeq{}
+
+	fastaOpen, err := os.Open(fastPred)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fastaRead := bufio.NewScanner(fastaOpen)
+	for fastaRead.Scan() {
+		line := fastaRead.Text()
+		if strings.HasPrefix(string(line), ">") {
+			fastID = append(fastID, fastPredID{
+				id: strings.ReplaceAll(string(line), ">", ""),
+			})
+		}
+		if !strings.HasPrefix(string(line), ">") {
+			fastSeq = append(fastSeq, fastPredSeq{
+				seq: string(line),
+			})
+		}
+	}
+
+	type tarFinderSeqStore struct {
+		miRNA      string
+		sequence   string
+		compseq    string
+		upstream   string
+		downstream string
+	}
+
+	tarFinderSeqAdd := []tarFinderSeqStore{}
+	for i := range tarFinderAdd {
+		for j := range fastID {
+			if tarFinderAdd[i].sequence == fastID[j].id {
+				tarFinderSeqAdd = append(tarFinderSeqAdd, tarFinderSeqStore{
+					miRNA:      tarFinderAdd[i].miRNA,
+					sequence:   tarFinderAdd[i].sequence,
+					compseq:    fastSeq[j].seq,
+					upstream:   fastSeq[j].seq[tarFinderAdd[i].start-upstream : tarFinderAdd[i].start],
+					downstream: fastSeq[j].seq[tarFinderAdd[i].end : tarFinderAdd[i].end+downstream],
+				})
+			}
+		}
+	}
+
+	tarFinderWrite, err := os.Create("tarFinder.fasta")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer tarFinderWrite.Close()
+	for i := range tarFinderSeqAdd {
+		tarFinderWrite.WriteString(
+			tarFinderSeqAdd[i].miRNA + "\t" + tarFinderSeqAdd[i].sequence + "\t" + tarFinderSeqAdd[i].compseq + "\t" + tarFinderSeqAdd[i].upstream + "\t" + tarFinderSeqAdd[i].downstream,
+		)
 	}
 }
