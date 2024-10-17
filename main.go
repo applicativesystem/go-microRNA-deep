@@ -31,15 +31,17 @@ func main() {
 }
 
 var (
-	psRNAPred string
-	tapirPred string
-	fastPred  string
-	evalue    float64
-	psRNAfile string
+	psRNAPred    string
+	tapirPred    string
+	fastPred     string
+	evalue       float64
+	psRNAfile    string
+	tarHunter    string
+	targetFinder string
+	upstream     int
+	downstream   int
 )
 
-// var fastasequence string
-// var filter float32
 var rootCmd = &cobra.Command{
 	Use:  "analyzePred",
 	Long: "This analyzes the microRNA prediction and makes them ready for the deep learning approaches",
@@ -57,10 +59,22 @@ var tapirCmd = &cobra.Command{
 	Run:  tapirFunc,
 }
 
-var psRNAMapCmd = &cmd.Command{
+var psRNAMapCmd = &cobra.Command{
 	Use:  "psRNAmapanalyze",
 	Long: "Analyze the psRNA map alignment of the reads to the genome",
 	Run:  psRNAMapFunc,
+}
+
+var tarHunterCmd = &cobra.Command{
+	Use:  "tarHunter",
+	Long: "analyze the tarHunter results for the miRNA predictions",
+	Run:  tarFunc,
+}
+
+var tarfinderCmd = &cobra.Command{
+	Use:  "targetFinder",
+	Long: "analyzes the targetFinder results for the miRNA predictions",
+	Run:  tarFinderFunc,
 }
 
 func init() {
@@ -78,10 +92,27 @@ func init() {
 		StringVarP(&psRNAfile, "psRNAfile", "P", "RNA mapping file", "map reads to the genome file")
 	psRNAMapCmd.Flags().
 		StringVarP(&fastPred, "fastapred", "f", "fasta file for the predictions", "fasta predict")
+	tarHunterCmd.Flags().
+		StringVarP(&tarHunter, "tarhunterfile", "T", "tarHunter predictions", "tarhunter analysis")
+	tarHunterCmd.Flags().
+		StringVarP(&fastPred, "fastapred", "f", "fasta file for the predictions", "fasta predict")
+	tarHunterCmd.Flags().
+		IntVarP(&upstream, "upstream", "U", 10, "upstream of the miRNA predictions")
+	tarHunterCmd.Flags().
+		IntVarP(&downstream, "downstream", "D", 10, "downstream of the miRNA predictions")
+	tarFinderCmd.Flags().
+		StringVarP(&targetFinder, "targetFinderfile", "T", "tarHunter predictions", "targetFinder analysis")
+	tarFinderCmd.Flags().
+		StringVarP(&fastPred, "fastapred", "f", "fasta file for the predictions", "fasta predict")
+	tarFinderCmd.Flags().
+		IntVarP(&upstream, "upstream", "U", 10, "upstream of the miRNA predictions")
+	tarFinderCmd.Flags().
+		IntVarP(&downstream, "downstream", "D", 10, "downstream of the miRNA predictions")
 
 	rootCmd.AddCommand(psRNACmd)
 	rootCmd.AddCommand(tapirCmd)
 	rootCmd.AddCommand(psRNAMapCmd)
+	rootCmd.AddCommand(tarHunterCmd)
 }
 
 func psRNAFunc(cmd *cobra.Command, args []string) {
@@ -231,7 +262,7 @@ func tapirFunc(cmd *cobra.Command, args []string) {
 			target = append(target, strings.Split(string(line), " ")[1])
 		}
 		if strings.HasPrefix(string(line), "miRNA") {
-			miRNA := strings.Split(strings.Split(string(line), ":")[3], "=")[2]
+			miRNA = append(miRNA, strings.Split(strings.Split(string(line), ":")[3], "=")[2])
 		}
 		if strings.HasPrefix(string(line), "score") {
 			scoreInter, _ := strconv.Atoi(strings.Split(string(line), " ")[1])
@@ -289,10 +320,10 @@ func tapirFunc(cmd *cobra.Command, args []string) {
 
 	for i := range target {
 		for j := range fastID {
-			if target[i] == fastID[i].id {
+			if target[i] == fastID[j].id {
 				tapSeq = append(tapSeq, tapirExtract{
 					tapid:  target[i],
-					tapseq: fastSeq[i].seq[start[i]:end[i]],
+					tapseq: fastSeq[j].seq[start[i]:end[i]],
 				})
 			}
 		}
@@ -401,4 +432,106 @@ func psRNAMapFunc(cmd *cobra.Command, args []string) {
 			readMapSeqStore[i].read + "\t" + readMapSeqStore[i].refseq + "\t" + intStartWrite + "\t" + intEndWrite,
 		)
 	}
+}
+
+func tarFunc(cmd *cobra.Command, args []string) {
+	type tarAnalyze struct {
+		targetID  string
+		targetSeq string
+		miRID     string
+		miRSeq    string
+		start     int
+		end       int
+	}
+
+	tarStore := []tarAnalyze{}
+
+	fOpen, err := os.Open(tarHunter)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fRead := bufio.NewScanner(fOpen)
+	for fRead.Scan() {
+		line := fRead.Text()
+		startAppend, _ := strconv.Atoi(strings.Split(string(line), " ")[9])
+		endAppend, _ := strconv.Atoi(strings.Split(string(line), " ")[10])
+		tarStore = append(tarStore, tarAnalyze{
+			targetID:  strings.Split(string(line), " ")[0],
+			targetSeq: strings.Split(string(line), " ")[1],
+			miRID:     strings.Split(string(line), " ")[2],
+			miRSeq:    strings.Split(string(line), " ")[3],
+			start:     startAppend,
+			end:       endAppend,
+		})
+	}
+
+	type fastPredID struct {
+		id string
+	}
+
+	type fastPredSeq struct {
+		seq string
+	}
+
+	fastID := []fastPredID{}
+	fastSeq := []fastPredSeq{}
+
+	fastaOpen, err := os.Open(fastPred)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fastaRead := bufio.NewScanner(fastaOpen)
+	for fastaRead.Scan() {
+		line := fastaRead.Text()
+		if strings.HasPrefix(string(line), ">") {
+			fastID = append(fastID, fastPredID{
+				id: strings.ReplaceAll(string(line), ">", ""),
+			})
+		}
+		if !strings.HasPrefix(string(line), ">") {
+			fastSeq = append(fastSeq, fastPredSeq{
+				seq: string(line),
+			})
+		}
+	}
+
+	type tarSeqStore struct {
+		targetID         string
+		targetSeq        string
+		miRNAID          string
+		miRANSeq         string
+		targetSeqComp    string
+		targetUpstream   string
+		targetdownStream string
+	}
+
+	tarStoreCapture := []tarSeqStore{}
+
+	for i := range tarStore {
+		for j := range fastID {
+			if tarStore[i].targetSeq == fastID[j].id {
+				tarStoreCapture = append(tarStoreCapture, tarSeqStore{
+					targetID:         tarStore[i].targetID,
+					targetSeq:        tarStore[i].targetSeq,
+					targetSeqComp:    fastSeq[j].seq,
+					targetUpstream:   fastSeq[j].seq[tarStore[i].start : tarStore[i].start-upstream],
+					targetdownStream: fastSeq[j].seq[tarStore[i].end : tarStore[i].end+downstream],
+				})
+			}
+		}
+	}
+
+	tarHunterWrite, err := os.Create("tarHunter.fasta")
+	if err != nil {
+		log.Fatal(err)
+	}
+	for i := range tarStoreCapture {
+		tarHunterWrite.WriteString(
+			tarStoreCapture[i].targetID + "\t" + tarStoreCapture[i].targetSeq + "\t" + tarStoreCapture[i].targetSeq + tarStoreCapture[i].targetSeqComp + "\t" + tarStoreCapture[i].targetUpstream + "\t" + tarStoreCapture[i].targetdownStream,
+		)
+	}
+}
+
+func tarFinderFunc(cmd *cobra.Command, args []string) {
+
 }
