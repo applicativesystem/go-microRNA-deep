@@ -84,7 +84,7 @@ func init() {
 	psRNACmd.Flags().
 		StringVarP(&fastPred, "fastapred", "f", "fasta file for the predictions", "fasta predict")
 	psRNACmd.Flags().
-		Float64VarP(&evalue, "expectation", "expectation value for filtering", 1.5, "expectation value")
+		Float64Var(&evalue, "expectation value", 0.5, "expectation value")
 	tapirCmd.Flags().
 		StringVarP(&psRNAPred, "psRNAPred", "p", "psRNA microRNA predictions", "psRNA predictions")
 	tapirCmd.Flags().
