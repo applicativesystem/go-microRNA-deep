@@ -35,6 +35,7 @@ var (
 	tapirPred string
 	fastPred  string
 	evalue    float64
+	psRNAfile string
 )
 
 // var fastasequence string
@@ -56,6 +57,12 @@ var tapirCmd = &cobra.Command{
 	Run:  tapirFunc,
 }
 
+var psRNAMapCmd = &cmd.Command{
+	Use:  "psRNAmapanalyze",
+	Long: "Analyze the psRNA map alignment of the reads to the genome",
+	Run:  psRNAMapFunc,
+}
+
 func init() {
 	psRNACmd.Flags().
 		StringVarP(&psRNAPred, "psRNAPred", "p", "psRNA microRNA predictions", "psRNA predictions")
@@ -67,6 +74,14 @@ func init() {
 		StringVarP(&psRNAPred, "psRNAPred", "p", "psRNA microRNA predictions", "psRNA predictions")
 	tapirCmd.Flags().
 		StringVarP(&fastPred, "fastapred", "f", "fasta file for the predictions", "fasta predict")
+	psRNAMapCmd.Flags().
+		StringVarP(&psRNAfile, "psRNAfile", "P", "RNA mapping file", "map reads to the genome file")
+	psRNAMapCmd.Flags().
+		StringVarP(&fastPred, "fastapred", "f", "fasta file for the predictions", "fasta predict")
+
+	rootCmd.AddCommand(psRNACmd)
+	rootCmd.AddCommand(tapirCmd)
+	rootCmd.AddCommand(psRNAMapCmd)
 }
 
 func psRNAFunc(cmd *cobra.Command, args []string) {
@@ -290,5 +305,100 @@ func tapirFunc(cmd *cobra.Command, args []string) {
 	defer tapwrite.Close()
 	for i := range tapSeq {
 		tapwrite.WriteString(tapSeq[i].tapid + "\t" + tapSeq[i].tapseq)
+	}
+}
+
+func psRNAMapFunc(cmd *cobra.Command, args []string) {
+	type psRNAfunc struct {
+		id     string
+		ref    string
+		strand string
+		start  int
+		stop   int
+		read   string
+	}
+
+	readMap := []psRNAfunc{}
+	fOpen, err := os.Open(psRNAfile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fRead := bufio.NewScanner(fOpen)
+	for fRead.Scan() {
+		line := fRead.Text()
+		startStore, _ := strconv.Atoi(strings.Split(string(line), " ")[3])
+		endStore, _ := strconv.Atoi(strings.Split(string(line), " ")[4])
+		readMap = append(readMap, psRNAfunc{
+			id:     strings.Split(string(line), " ")[0],
+			ref:    strings.Split(string(line), " ")[1],
+			strand: strings.Split(string(line), " ")[2],
+			start:  startStore,
+			stop:   endStore,
+			read:   strings.Split(string(line), " ")[5],
+		})
+	}
+
+	type fastPredID struct {
+		id string
+	}
+
+	type fastPredSeq struct {
+		seq string
+	}
+
+	fastID := []fastPredID{}
+	fastSeq := []fastPredSeq{}
+
+	fastaOpen, err := os.Open(fastPred)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fastaRead := bufio.NewScanner(fastaOpen)
+	for fastaRead.Scan() {
+		line := fastaRead.Text()
+		if strings.HasPrefix(string(line), ">") {
+			fastID = append(fastID, fastPredID{
+				id: strings.ReplaceAll(string(line), ">", ""),
+			})
+		}
+		if !strings.HasPrefix(string(line), ">") {
+			fastSeq = append(fastSeq, fastPredSeq{
+				seq: string(line),
+			})
+		}
+	}
+
+	type readMapSeq struct {
+		read   string
+		start  int
+		stop   int
+		refseq string
+	}
+
+	readMapSeqStore := []readMapSeq{}
+
+	for i := range readMap {
+		for j := range fastID {
+			if readMap[i].id == fastID[i].id {
+				readMapSeqStore = append(readMapSeqStore, readMapSeq{
+					read:   readMap[i].read,
+					start:  readMap[i].start,
+					stop:   readMap[i].stop,
+					refseq: fastSeq[j].seq[readMap[i].start:readMap[i].stop],
+				})
+			}
+		}
+	}
+
+	readMapWrite, err := os.Create("psRNAMap.fasta")
+	if err != nil {
+		log.Fatal(err)
+	}
+	for i := range readMapSeqStore {
+		intStartWrite := string(readMapSeqStore[i].start)
+		intEndWrite := string(readMapSeqStore[i].stop)
+		readMapWrite.WriteString(
+			readMapSeqStore[i].read + "\t" + readMapSeqStore[i].refseq + "\t" + intStartWrite + "\t" + intEndWrite,
+		)
 	}
 }
