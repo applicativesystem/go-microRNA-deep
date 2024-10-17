@@ -31,15 +31,16 @@ func main() {
 }
 
 var (
-	psRNAPred    string
-	tapirPred    string
-	fastPred     string
-	evalue       float64
-	psRNAfile    string
-	tarHunter    string
-	targetFinder string
-	upstream     int
-	downstream   int
+	psRNAPred     string
+	tapirPred     string
+	fastPred      string
+	evalue        float64
+	psRNAfile     string
+	tarHunter     string
+	targetFinder  string
+	tarFinderFile string
+	upstream      int
+	downstream    int
 )
 
 var rootCmd = &cobra.Command{
@@ -71,7 +72,7 @@ var tarHunterCmd = &cobra.Command{
 	Run:  tarFunc,
 }
 
-var tarfinderCmd = &cobra.Command{
+var tarFinderCmd = &cobra.Command{
 	Use:  "targetFinder",
 	Long: "analyzes the targetFinder results for the miRNA predictions",
 	Run:  tarFinderFunc,
@@ -101,7 +102,7 @@ func init() {
 	tarHunterCmd.Flags().
 		IntVarP(&downstream, "downstream", "D", 10, "downstream of the miRNA predictions")
 	tarFinderCmd.Flags().
-		StringVarP(&targetFinder, "targetFinderfile", "T", "tarHunter predictions", "targetFinder analysis")
+		StringVarP(&tarFinderFile, "targetFinderfile", "T", "targetFinder predictions", "targetFinder analysis")
 	tarFinderCmd.Flags().
 		StringVarP(&fastPred, "fastapred", "f", "fasta file for the predictions", "fasta predict")
 	tarFinderCmd.Flags().
@@ -113,6 +114,7 @@ func init() {
 	rootCmd.AddCommand(tapirCmd)
 	rootCmd.AddCommand(psRNAMapCmd)
 	rootCmd.AddCommand(tarHunterCmd)
+	rootCmd.AddCommand(tarFinderCmd)
 }
 
 func psRNAFunc(cmd *cobra.Command, args []string) {
@@ -533,5 +535,32 @@ func tarFunc(cmd *cobra.Command, args []string) {
 }
 
 func tarFinderFunc(cmd *cobra.Command, args []string) {
+	type tarFinderCap struct {
+		miRNA    string
+		sequence string
+		start    int64
+		end      int64
+		mfe      float64
+	}
 
+	tarFinderAdd := []tarFinderCap{}
+
+	fOpen, err := os.Open(tarFinderFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fRead := bufio.NewScanner(fOpen)
+	for fRead.Scan() {
+		line := fRead.Text()
+		startConvert, _ := strconv.ParseInt(strings.Split(string(line), " ")[15], 0, 32)
+		endConvert, _ := strconv.ParseInt(strings.Split(string(line), " ")[16], 0, 32)
+		mfeConvert, _ := strconv.ParseFloat(strings.Split(string(line), " ")[18], 64)
+		tarFinderAdd := append(tarFinderAdd, tarFinderCap{
+			miRNA:    strings.Split(string(line), " ")[0],
+			sequence: strings.Split(string(line), " ")[11],
+			start:    startConvert,
+			end:      endConvert,
+			mfe:      mfeConvert,
+		})
+	}
 }
