@@ -6,10 +6,8 @@ Author Gaurav Sablok
 Universitat Potsdam
 Date 2024-10-16
 
-a miRNA serialization for the extraction of the microRNA predictions and also for the filtering of the microRNAs
-and prepairing the microRNAs for the deep learning. It takes all forms of the micrRNA predictions and all the target
-analyzer for the microRNA predictions and prepares them for the deep learning.
-
+It takes all forms of the micrRNA predictions and all the target analyzer for the microRNA predictions
+and prepares them for the deep learning.
 
 */
 
@@ -85,14 +83,26 @@ func init() {
 		StringVarP(&fastPred, "fastapred", "f", "fasta file for the predictions", "fasta predict")
 	psRNACmd.Flags().
 		Float64Var(&evalue, "expectation value", 0.5, "expectation value")
+	psRNACmd.Flags().
+		IntVarP(&upstream, "upstream", "U", 10, "upstream of the miRNA predictions")
+	psRNACmd.Flags().
+		IntVarP(&downstream, "downstream", "D", 10, "downstream of the miRNA predictions")
 	tapirCmd.Flags().
-		StringVarP(&psRNAPred, "psRNAPred", "p", "psRNA microRNA predictions", "psRNA predictions")
+		StringVarP(&psRNAPred, "tapir", "p", "psRNA microRNA predictions", "psRNA predictions")
 	tapirCmd.Flags().
 		StringVarP(&fastPred, "fastapred", "f", "fasta file for the predictions", "fasta predict")
+	tapirCmd.Flags().
+		IntVarP(&upstream, "upstream", "U", 10, "upstream of the miRNA predictions")
+	tapirCmd.Flags().
+		IntVarP(&downstream, "downstream", "D", 10, "downstream of the miRNA predictions")
 	psRNAMapCmd.Flags().
-		StringVarP(&psRNAfile, "psRNAfile", "P", "RNA mapping file", "map reads to the genome file")
+		StringVarP(&psRNAfile, "psRNAmapfile", "P", "RNA mapping file", "map reads to the genome file")
 	psRNAMapCmd.Flags().
 		StringVarP(&fastPred, "fastapred", "f", "fasta file for the predictions", "fasta predict")
+	psRNAMapCmd.Flags().
+		IntVarP(&upstream, "upstream", "U", 10, "upstream of the miRNA predictions")
+	psRNAMapCmd.Flags().
+		IntVarP(&downstream, "downstream", "D", 10, "downstream of the miRNA predictions")
 	tarHunterCmd.Flags().
 		StringVarP(&tarHunter, "tarhunterfile", "T", "tarHunter predictions", "tarhunter analysis")
 	tarHunterCmd.Flags().
@@ -214,8 +224,11 @@ func psRNAFunc(cmd *cobra.Command, args []string) {
 	type extractSeq struct {
 		target      string
 		targetSeq   string
+		targetcomp  string
 		targetStart int
 		targetEnd   int
+		upstream    string
+		downstream  string
 	}
 
 	targetExtract := []extractSeq{}
@@ -228,19 +241,22 @@ func psRNAFunc(cmd *cobra.Command, args []string) {
 					targetSeq:   fastSeq[j].seq[filteredmiRNA[i].targetStart:filteredmiRNA[i].targetEnd],
 					targetStart: filteredmiRNA[i].targetStart,
 					targetEnd:   filteredmiRNA[i].targetEnd,
+					targetcomp:  fastSeq[j].seq,
+					upstream:    fastSeq[j].seq[filteredmiRNA[i].targetStart-upstream : filteredmiRNA[i].targetEnd],
+					downstream:  fastSeq[j].seq[filteredmiRNA[i].targetEnd : filteredmiRNA[i].targetEnd+downstream],
 				})
 			}
 		}
 	}
 
-	psRNAneural, err := os.Create("psRNANeural.txt")
+	psRNAneural, err := os.Create("psRNANeural.fasta")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer psRNAneural.Close()
 	for i := range targetExtract {
 		psRNAneural.WriteString(
-			targetExtract[i].target + "\t" + ">" + targetExtract[i].targetSeq,
+			targetExtract[i].target + "\t" + ">" + targetExtract[i].targetSeq + "\t" + targetExtract[i].targetcomp + "\t" + targetExtract[i].upstream + "\t" + targetExtract[i].downstream,
 		)
 	}
 }
@@ -284,8 +300,11 @@ func tapirFunc(cmd *cobra.Command, args []string) {
 	}
 
 	type tapirExtract struct {
-		tapid  string
-		tapseq string
+		tapid      string
+		tapseq     string
+		tapcomp    string
+		upstream   string
+		downstream string
 	}
 
 	type fastPredID struct {
@@ -324,8 +343,11 @@ func tapirFunc(cmd *cobra.Command, args []string) {
 		for j := range fastID {
 			if target[i] == fastID[j].id {
 				tapSeq = append(tapSeq, tapirExtract{
-					tapid:  target[i],
-					tapseq: fastSeq[j].seq[start[i]:end[i]],
+					tapid:      target[i],
+					tapseq:     fastSeq[j].seq[start[i]:end[i]],
+					tapcomp:    fastSeq[j].seq,
+					upstream:   fastSeq[j].seq[start[i]-upstream : start[i]],
+					downstream: fastSeq[j].seq[end[i] : end[i]+downstream],
 				})
 			}
 		}
@@ -337,7 +359,9 @@ func tapirFunc(cmd *cobra.Command, args []string) {
 	}
 	defer tapwrite.Close()
 	for i := range tapSeq {
-		tapwrite.WriteString(tapSeq[i].tapid + "\t" + tapSeq[i].tapseq)
+		tapwrite.WriteString(
+			tapSeq[i].tapid + "\t" + tapSeq[i].tapseq + "\t" + tapSeq[i].tapcomp + "\t" + tapSeq[i].upstream + "\t" + tapSeq[i].downstream,
+		)
 	}
 }
 
@@ -402,10 +426,13 @@ func psRNAMapFunc(cmd *cobra.Command, args []string) {
 	}
 
 	type readMapSeq struct {
-		read   string
-		start  int
-		stop   int
-		refseq string
+		read       string
+		start      int
+		stop       int
+		refseq     string
+		refcomp    string
+		upstream   string
+		downstream string
 	}
 
 	readMapSeqStore := []readMapSeq{}
@@ -414,10 +441,13 @@ func psRNAMapFunc(cmd *cobra.Command, args []string) {
 		for j := range fastID {
 			if readMap[i].id == fastID[i].id {
 				readMapSeqStore = append(readMapSeqStore, readMapSeq{
-					read:   readMap[i].read,
-					start:  readMap[i].start,
-					stop:   readMap[i].stop,
-					refseq: fastSeq[j].seq[readMap[i].start:readMap[i].stop],
+					read:       readMap[i].read,
+					start:      readMap[i].start,
+					stop:       readMap[i].stop,
+					refseq:     fastSeq[j].seq[readMap[i].start:readMap[i].stop],
+					refcomp:    fastSeq[j].seq,
+					upstream:   fastSeq[j].seq[readMap[i].start-upstream : readMap[i].start],
+					downstream: fastSeq[j].seq[readMap[i].stop : readMap[i].stop+downstream],
 				})
 			}
 		}
@@ -428,10 +458,8 @@ func psRNAMapFunc(cmd *cobra.Command, args []string) {
 		log.Fatal(err)
 	}
 	for i := range readMapSeqStore {
-		intStartWrite := string(readMapSeqStore[i].start)
-		intEndWrite := string(readMapSeqStore[i].stop)
 		readMapWrite.WriteString(
-			readMapSeqStore[i].read + "\t" + readMapSeqStore[i].refseq + "\t" + intStartWrite + "\t" + intEndWrite,
+			readMapSeqStore[i].read + "\t" + readMapSeqStore[i].refseq + "\t" + readMapSeqStore[i].refseq + "\t" + readMapSeqStore[i].refcomp + "\t" + readMapSeqStore[i].upstream + "\t" + readMapSeqStore[i].downstream,
 		)
 	}
 }
