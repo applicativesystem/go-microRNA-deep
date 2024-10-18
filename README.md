@@ -17,6 +17,7 @@ Available Commands:
   completion      Generate the autocompletion script for the specified shell
   help            Help about any command
   psRNAanalyzer
+  psRobot
   psRNAmapanalyze
   tapiranalyzer
   tarHunter
@@ -86,6 +87,20 @@ Flags:
   -h, --help                      help for targetFinder
   -T, --targetFinderfile string   targetFinder analysis (default "targetFinder predictions")
   -U, --upstream int              upstream of the miRNA predictions (default 10)
-``
+
+go run main.go psRobot -h
+analyzes the results from the psRobot microRNA predictions
+
+Usage:
+  analyzePred psRobot [flags]
+
+Flags:
+  -D, --downstream int       downstream of the miRNA predictions (default 10)
+  -f, --fastapred string     fasta predict (default "fasta file for the predictions")
+  -h, --help                 help for psRobot
+  -R, --psRobotfile string    psRobot analysis (default "psRobot predictions")
+  -U, --upstream int         upstream of the miRNA predictions (default 10)
+
+```
 
 Gaurav Sablok

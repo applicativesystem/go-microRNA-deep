@@ -39,6 +39,7 @@ var (
 	tarFinderFile string
 	upstream      int
 	downstream    int
+	psRobotFile   string
 )
 
 var rootCmd = &cobra.Command{
@@ -74,6 +75,12 @@ var tarFinderCmd = &cobra.Command{
 	Use:  "targetFinder",
 	Long: "analyzes the targetFinder results for the miRNA predictions",
 	Run:  tarFinderFunc,
+}
+
+var psRobotCmd = &cobra.Command{
+	Use:  "psRobot",
+	Long: "analyzes the results from the psRobot microRNA predictions",
+	Run:  psRobotFunc,
 }
 
 func init() {
@@ -119,12 +126,21 @@ func init() {
 		IntVarP(&upstream, "upstream", "U", 10, "upstream of the miRNA predictions")
 	tarFinderCmd.Flags().
 		IntVarP(&downstream, "downstream", "D", 10, "downstream of the miRNA predictions")
+	psRobotCmd.Flags().
+		StringVarP(&psRobotFile, "psRobotfile", "R", "psRobot predictions", " psRobot analysis")
+	psRobotCmd.Flags().
+		StringVarP(&fastPred, "fastapred", "f", "fasta file for the predictions", "fasta predict")
+	psRobotCmd.Flags().
+		IntVarP(&upstream, "upstream", "U", 10, "upstream of the miRNA predictions")
+	psRobotCmd.Flags().
+		IntVarP(&downstream, "downstream", "D", 10, "downstream of the miRNA predictions")
 
 	rootCmd.AddCommand(psRNACmd)
 	rootCmd.AddCommand(tapirCmd)
 	rootCmd.AddCommand(psRNAMapCmd)
 	rootCmd.AddCommand(tarHunterCmd)
 	rootCmd.AddCommand(tarFinderCmd)
+	rootCmd.AddCommand(psRobotCmd)
 }
 
 func psRNAFunc(cmd *cobra.Command, args []string) {
@@ -654,5 +670,129 @@ func tarFinderFunc(cmd *cobra.Command, args []string) {
 		tarFinderWrite.WriteString(
 			tarFinderSeqAdd[i].miRNA + "\t" + tarFinderSeqAdd[i].sequence + "\t" + tarFinderSeqAdd[i].compseq + "\t" + tarFinderSeqAdd[i].upstream + "\t" + tarFinderSeqAdd[i].downstream,
 		)
+	}
+}
+
+func psRobotFunc(cmd *cobra.Command, args []string) {
+	type psRobotCapture struct {
+		query        string
+		score        float64
+		queryStart   int
+		queryEnd     int
+		subjectStart int
+		subjectEnd   int
+	}
+
+	psRobotC := []psRobotCapture{}
+	sortedID := []string{}
+	sortedScore := []float64{}
+
+	sortedQueryStart := []int{}
+	sortedQueryEnd := []int{}
+
+	sortedSubjectStart := []int{}
+	sortedSubjectEnd := []int{}
+
+	fOpen, err := os.Open(psRobotFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fRead := bufio.NewScanner(fOpen)
+	for fRead.Scan() {
+		line := fRead.Text()
+		if strings.HasPrefix(string(line), ">") {
+			capStore := strings.Split(string(line), "\t")[0]
+			capScore := strings.Split(strings.Split(string(line), "\t")[1], ":")[1]
+			scoreFloat, _ := strconv.ParseFloat(capScore, 64)
+			sortedID = append(sortedID, strings.ReplaceAll(capStore, ">", ""))
+			sortedScore = append(sortedScore, scoreFloat)
+		}
+		if strings.HasPrefix(string(line), "Query") {
+			queryStart, _ := strconv.Atoi(
+				strings.Split(strings.Split(string(line), "\t")[1], "\t")[0],
+			)
+			queryEnd, _ := strconv.Atoi(
+				strings.Split(strings.Split(string(line), "\t")[1], "\t")[2],
+			)
+			sortedQueryStart = append(sortedQueryStart, queryStart)
+			sortedQueryEnd = append(sortedQueryEnd, queryEnd)
+		}
+		if strings.HasPrefix(string(line), "Sbjct") {
+			sbjctStart, _ := strconv.Atoi(
+				strings.Split(strings.Split(string(line), "\t")[1], "\t")[0],
+			)
+			sbjctEnd, _ := strconv.Atoi(
+				strings.Split(strings.Split(string(line), "\t")[1], "\t")[2],
+			)
+			sortedSubjectStart = append(sortedSubjectStart, sbjctStart)
+			sortedSubjectEnd = append(sortedSubjectEnd, sbjctEnd)
+		}
+	}
+
+	for i := range sortedID {
+		psRobotC = append(psRobotC, psRobotCapture{
+			query:        sortedID[i],
+			score:        sortedScore[i],
+			queryStart:   sortedQueryStart[i],
+			queryEnd:     sortedQueryEnd[i],
+			subjectStart: sortedSubjectStart[i],
+			subjectEnd:   sortedSubjectEnd[i],
+		})
+	}
+
+	type fastPredID struct {
+		id string
+	}
+
+	type fastPredSeq struct {
+		seq string
+	}
+
+	fastID := []fastPredID{}
+	fastSeq := []fastPredSeq{}
+
+	fastaOpen, err := os.Open(fastPred)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fastaRead := bufio.NewScanner(fastaOpen)
+	for fastaRead.Scan() {
+		line := fastaRead.Text()
+		if strings.HasPrefix(string(line), ">") {
+			fastID = append(fastID, fastPredID{
+				id: strings.ReplaceAll(string(line), ">", ""),
+			})
+		}
+		if !strings.HasPrefix(string(line), ">") {
+			fastSeq = append(fastSeq, fastPredSeq{
+				seq: string(line),
+			})
+		}
+	}
+
+	type psRobotSeq struct {
+		query         string
+		score         float64
+		subjectString string
+		subjectComp   string
+		upstream      string
+		downstream    string
+	}
+
+	finalpsRobotSeq := []psRobotSeq{}
+
+	for i := range psRobotC {
+		for j := range fastID {
+			if fastID[j].id == psRobotC[i].query {
+				finalpsRobotSeq = append(finalpsRobotSeq, psRobotSeq{
+					query:         psRobotC[i].query,
+					score:         psRobotC[i].score,
+					subjectString: fastSeq[j].seq[psRobotC[i].subjectStart:psRobotC[i].subjectEnd],
+					subjectComp:   fastSeq[j].seq,
+					upstream:      fastSeq[j].seq[psRobotC[i].subjectStart-upstream : psRobotC[i].subjectStart],
+					downstream:    fastSeq[j].seq[psRobotC[i].subjectEnd : psRobotC[i].subjectEnd+downstream],
+				})
+			}
+		}
 	}
 }
