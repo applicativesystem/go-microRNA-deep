@@ -1,4 +1,4 @@
 #Please import the downloaded file into Microsoft Excel or other speadsheet software
 miRNA_Acc.	Target_Acc.	Expectation	UPE$	miRNA_start	miRNA_end	Target_start	Target_end	miRNA_aligned_fragment	Target_aligned_fragment	Inhibition	Target_Desc.	Multiplicity
-ath-miR5658	chr5:6013917-6014399_	2.5	-1.0	1	21	263	285	AUGAUGAUGAUGAUGAUGA--AA	UUGGUCAUCAUCAUCAUCAUCAU	Cleavage	-	1
-ath-miR1886.1	chr5:939072-939697_	3.0	-1.0	1	21	10	30	UGAGAGAAGUGAGAUGAAAUC	AAUAUGAUCUCACUUCUCUCU	Cleavage	+	1
+ath-miR5658	chr5:6013917-6014399_	2.5	-1.0	1	21	10	31	AUGAUGAUGAUGAUGAUGA--AA	UUGGUCAUCAUCAUCAUCAUCAU	Cleavage	-	1
+ath-miR1886.1	chr5:939072-939697_	3.0	-1.0	1	21	5	27	UGAGAGAAGUGAGAUGAAAUC	AAUAUGAUCUCACUUCUCUCU	Cleavage	+	1

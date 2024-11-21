@@ -2,11 +2,11 @@
 
 Query:          1 TGACAGAAGAGAGTGAGCAC 20
                   |||||||||||||*||||||
-Sbjct:       2387 ACTGTCTTCTCTCTCTCGTG 2368
+Sbjct:         23 ACTGTCTTCTCTCTCTCGTG 43
 
 
 >smRNA02	Score: 0.8	tar01
 
 Query:          1 TGCCAAAGGAGATTTGCCCTG 21
                   |||||||||||||||||*||:
-Sbjct:        963 ACGGTTTCCTCTAAACGAGAT 943
+Sbjct:          3 ACGGTTTCCTCTAAACGAGAT 24

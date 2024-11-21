@@ -8,7 +8,7 @@ target        chr1:7410311-7412481_-
 miRNA         ID=MIMAT0004260;Alias=MIMAT0004260;Name=ath-miR838;Derives_from
 score         3
 mfe_ratio     0.74
-start         1579
+start         10
 seed_gap      0
 seed_mismatch 0
 seed_gu       0
